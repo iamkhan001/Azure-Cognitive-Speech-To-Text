@@ -52,7 +52,7 @@ class MainActivity : AppCompatActivity() {
                 Log.d(tag,"Recognition Stopped >> ")
                 isRunning = true
                 btn.text = "Stop Recognition"
-                Thread(runnable).start()
+
             }
 
         }
