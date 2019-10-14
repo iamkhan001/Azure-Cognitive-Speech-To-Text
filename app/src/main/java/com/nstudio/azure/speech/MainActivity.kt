@@ -5,8 +5,7 @@ import android.os.Bundle
 import android.Manifest.permission.INTERNET
 import android.Manifest.permission.RECORD_AUDIO
 import android.annotation.SuppressLint
-import android.os.AsyncTask
-import android.os.Handler
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import com.microsoft.cognitiveservices.speech.ResultReason
 import com.microsoft.cognitiveservices.speech.SpeechConfig
@@ -19,14 +18,23 @@ import kotlinx.android.synthetic.main.activity_main.*
 @SuppressLint("SetTextI18n")
 class MainActivity : AppCompatActivity() {
 
-    private val onVoiceResultListener = object : OnVoiceResultListener {
-        override fun onResult(result: SpeechRecognitionResult) {
-           showResult(result)
-        }
+    private val tag = "MainActivity"
+
+    private val speechSubscriptionKey = "55a097f92d044a2f8594fb322e8ce16b"
+    private val serviceRegion = "westus"
+    private val config = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion)!!
+    private var isRunning = false
+
+    private val runnable = Runnable {
+        Log.e(tag,"Start Recognition >> ")
+        Thread.sleep(2000)
+        val reco = SpeechRecognizer(config)
+        val task = reco.recognizeOnceAsync()!!
+        val result = task.get()!!
+        Log.e(tag,"Got Result >> ")
+        showResult(result)
+        reco.close()
     }
-
-
-    private val recognizeTask = RecognizeTask(onVoiceResultListener)
 
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,64 +44,42 @@ class MainActivity : AppCompatActivity() {
         val requestCode = 5 // unique code for the permission request
         ActivityCompat.requestPermissions(this@MainActivity, arrayOf(RECORD_AUDIO, INTERNET), requestCode)
 
-        recognizeTask.execute()
+        btn.setOnClickListener {
+            if (isRunning){
+                isRunning = false
+                btn.text = "Start Recognition"
+            }else{
+                Log.d(tag,"Recognition Stopped >> ")
+                isRunning = true
+                btn.text = "Stop Recognition"
+                Thread(runnable).start()
+            }
+
+        }
+
+    }
+
+
+    override fun onPause() {
+        super.onPause()
+        isRunning = false
     }
 
     private fun showResult(result: SpeechRecognitionResult) {
-        if (result.reason === ResultReason.RecognizedSpeech) {
-            tvResult.text = result.toString()
+        Log.d(tag,"Result >> ")
+        runOnUiThread {
+            if (result.reason === ResultReason.RecognizedSpeech) {
+                tvResult.text = result.toString()
 
-            Handler().postDelayed({ recognizeTask.execute() },1000)
-
-        } else {
-            tvResult.text = "Error recognizing. Did you update the subscription info?" + System.lineSeparator() + result.toString()
-        }
-    }
-
-    override fun onDestroy() {
-        recognizeTask.isCanceled = true
-        super.onDestroy()
-    }
-
-    private class RecognizeTask(val onVoiceResultListener: OnVoiceResultListener) : AsyncTask<Void,Void,SpeechRecognitionResult>(){
-
-        private val speechSubscriptionKey = "55a097f92d044a2f8594fb322e8ce16b"
-        private val serviceRegion = "westus"
-        var isCanceled = false
-
-        override fun doInBackground(vararg p0: Void?): SpeechRecognitionResult {
-            val config = SpeechConfig.fromSubscription(speechSubscriptionKey, serviceRegion)!!
-            val reco = SpeechRecognizer(config)
-            val task = reco.recognizeOnceAsync()!!
-
-            val result = task.get()!!
-
-            reco.close()
-
-            return result
-
-        }
-
-        @SuppressLint("SetTextI18n")
-        override fun onPostExecute(result: SpeechRecognitionResult?) {
-            super.onPostExecute(result)
-
-            if (isCanceled){
-                return
-            }
-
-            try {
-                if (result != null) {
-                    onVoiceResultListener.onResult(result)
-                }
-            }catch (e:Exception){
-                e.printStackTrace()
+            } else {
+                tvResult.text = "Error recognizing. Did you update the subscription info?" + System.lineSeparator() + result.toString()
             }
         }
+        if (isRunning){
+            Thread(runnable).start()
+        }
+
     }
 
-    private interface OnVoiceResultListener{
-        fun onResult(result: SpeechRecognitionResult)
-    }
 
 }
